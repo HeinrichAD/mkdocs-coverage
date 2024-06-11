@@ -30,7 +30,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "mkdocs>=1.2",
+    "mkdocs>=1.6",
 ]
 
 [project.urls]
