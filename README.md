@@ -27,14 +27,25 @@ pipx install mkdocs-coverage
 
 ```yaml
 # mkdocs.yml
-
 nav:
 - Coverage report: coverage.md
 
 plugins:
 - coverage:
-    page_name: coverage  # default
+    page_path: coverage  # default
     html_report_dir: htmlcov  # default
+```
+
+The page path can be nested:
+
+```yaml
+# mkdocs.yml
+nav:
+- Coverage report: dev/reports/coverage.md
+
+plugins:
+- coverage:
+    page_path: dev/reports/coverage
 ```
 
 Now serve your documentation,

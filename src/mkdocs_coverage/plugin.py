@@ -5,10 +5,12 @@ from __future__ import annotations
 import re
 import shutil
 import textwrap
+import warnings
 from pathlib import Path
-from tempfile import mkdtemp
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import TYPE_CHECKING, Any
 
+from mkdocs.config.base import Config
+from mkdocs.config.config_options import Optional
 from mkdocs.config.config_options import Type as MkType
 from mkdocs.plugins import BasePlugin
 from mkdocs.structure.files import File, Files
@@ -16,20 +18,28 @@ from mkdocs.structure.files import File, Files
 from mkdocs_coverage.loggers import get_plugin_logger
 
 if TYPE_CHECKING:
-    from mkdocs.config import Config
+    from mkdocs.config.defaults import MkDocsConfig
 
 log = get_plugin_logger(__name__)
 
 
-class MkDocsCoveragePlugin(BasePlugin):
+class MkDocsCoverageConfig(Config):
+    """Configuration options for the plugin."""
+
+    page_name = Optional(MkType(str, default=None))
+    page_path = MkType(str, default="coverage")
+    html_report_dir = MkType(str, default="htmlcov")
+
+
+class MkDocsCoveragePlugin(BasePlugin[MkDocsCoverageConfig]):
     """The MkDocs plugin to integrate the coverage HTML report in the site."""
 
-    config_scheme: Sequence[tuple[str, MkType]] = (
-        ("page_name", MkType(str, default="coverage")),
-        ("html_report_dir", MkType(str, default="htmlcov")),
-    )
+    def __init__(self) -> None:
+        """Initialize the plugin."""
+        super().__init__()
+        self.page_path: str = ""
 
-    def on_files(self, files: Files, config: Config, **kwargs: Any) -> Files:  # noqa: ARG002
+    def on_files(self, files: Files, config: MkDocsConfig, **kwargs: Any) -> Files:  # noqa: ARG002
         """Add the coverage page to the navigation.
 
         Hook for the [`on_files` event](https://www.mkdocs.org/user-guide/plugins/#on_files).
@@ -43,7 +53,20 @@ class MkDocsCoveragePlugin(BasePlugin):
         Returns:
             The modified files collection.
         """
-        covindex = "covindex.html" if config["use_directory_urls"] else f"{self.config['page_name']}/covindex.html"
+        page_name = self.config.page_name
+        page_path: str
+        if page_name is not None:
+            warnings.warn(
+                "The 'page_name' configuration option is deprecated and will be removed in a future release. "
+                "Use the 'page_path' configuration option instead.",
+                DeprecationWarning,
+                stacklevel=1,
+            )
+            page_path = page_name
+        else:
+            page_path = self.config.page_path
+        self.page_path = page_path
+        covindex = "covindex.html" if config.use_directory_urls else f"{page_path}/covindex.html"
 
         style = textwrap.dedent(
             """
@@ -85,22 +108,16 @@ class MkDocsCoveragePlugin(BasePlugin):
             """,
         )
         page_contents = style + iframe + script
-        tempdir = mkdtemp()
-        page_name = self.config["page_name"] + ".md"
-        tempfile = Path(tempdir) / page_name
-        with tempfile.open("w") as fp:
-            fp.write(page_contents)
         files.append(
-            File(
-                page_name,
-                str(tempfile.parent),
-                config["site_dir"],
-                config["use_directory_urls"],
+            File.generated(
+                config=config,
+                src_uri=page_path + ".md",
+                content=page_contents,
             ),
         )
         return files
 
-    def on_post_build(self, config: Config, **kwargs: Any) -> None:  # noqa: ARG002
+    def on_post_build(self, config: MkDocsConfig, **kwargs: Any) -> None:  # noqa: ARG002
         """Copy the coverage HTML report into the site directory.
 
         Hook for the [`on_post_build` event](https://www.mkdocs.org/user-guide/plugins/#on_post_build).
@@ -112,25 +129,25 @@ class MkDocsCoveragePlugin(BasePlugin):
             config: The MkDocs config object.
             **kwargs: Additional arguments passed by MkDocs.
         """
-        site_dir = Path(config["site_dir"])
-        coverage_dir = site_dir / self.config["page_name"]
+        site_dir = Path(config.site_dir)
+        coverage_dir = site_dir / self.page_path
         tmp_index = site_dir / ".coverage-tmp.html"
 
-        if config["use_directory_urls"]:
-            shutil.move(coverage_dir / "index.html", tmp_index)
+        if config.use_directory_urls:
+            shutil.move(str(coverage_dir / "index.html"), tmp_index)
         else:
-            shutil.move(coverage_dir.with_suffix(".html"), tmp_index)
+            shutil.move(str(coverage_dir.with_suffix(".html")), tmp_index)
 
         shutil.rmtree(str(coverage_dir), ignore_errors=True)
         try:
-            shutil.copytree(self.config["html_report_dir"], str(coverage_dir))
+            shutil.copytree(self.config.html_report_dir, str(coverage_dir))
         except FileNotFoundError:
-            log.warning(f"No such HTML report directory: {self.config['html_report_dir']}")
+            log.warning(f"No such HTML report directory: {self.config.html_report_dir}")
             return
 
-        shutil.move(coverage_dir / "index.html", coverage_dir / "covindex.html")
+        shutil.move(str(coverage_dir / "index.html"), coverage_dir / "covindex.html")
 
-        if config["use_directory_urls"]:
+        if config.use_directory_urls:
             shutil.move(str(tmp_index), coverage_dir / "index.html")
         else:
             shutil.move(str(tmp_index), coverage_dir.with_suffix(".html"))
