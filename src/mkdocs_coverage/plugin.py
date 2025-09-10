@@ -32,7 +32,7 @@ class MkDocsCoverageConfig(Config):
     )
     page_path = MkType(str, default="coverage")
     html_report_dir = MkType(str, default="htmlcov")
-    coverage_inplace_placeholder = MkType(str, default="{{mkdocs-coverage}}")
+    coverage_inplace_placeholder = MkType(str, default="<!-- mkdocs-coverage -->")
 
 
 class MkDocsCoveragePlugin(BasePlugin[MkDocsCoverageConfig]):
