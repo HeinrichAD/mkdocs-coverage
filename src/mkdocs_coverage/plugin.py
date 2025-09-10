@@ -6,11 +6,10 @@ import re
 import shutil
 import textwrap
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from mkdocs.config.base import Config
-from mkdocs.config.config_options import Optional as MkOptional
-from mkdocs.config.config_options import Type as MkType
+from mkdocs.config.config_options import Deprecated as MkDeprecated, Optional as MkOptional, Type as MkType
 from mkdocs.plugins import BasePlugin
 from mkdocs.structure.files import File, Files
 
@@ -25,14 +24,19 @@ log = get_plugin_logger(__name__)
 class MkDocsCoverageConfig(Config):
     """Configuration options for the plugin."""
 
+    page_name = MkDeprecated(moved_to="page_path", option_type=MkOptional(MkType(str, default=None)))
     page_path = MkType(str, default="coverage")
     html_report_dir = MkType(str, default="htmlcov")
-    hide_page_title = MkOptional(MkType(bool))  # default: None
     coverage_inplace_placeholder = MkType(str, default="{{mkdocs-coverage}}")
 
 
 class MkDocsCoveragePlugin(BasePlugin[MkDocsCoverageConfig]):
     """The MkDocs plugin to integrate the coverage HTML report in the site."""
+
+    def __init__(self) -> None:
+        """Initialize the plugin."""
+        super().__init__()
+        self.page_path: str = ""
 
     def on_files(self, files: Files, config: MkDocsConfig, **kwargs: Any) -> Files:  # noqa: ARG002
         """Add the coverage page to the navigation.
@@ -48,21 +52,19 @@ class MkDocsCoveragePlugin(BasePlugin[MkDocsCoverageConfig]):
         Returns:
             The modified files collection.
         """
-        covindex = "covindex.html" if config.use_directory_urls else f"{self.config.page_path}/covindex.html"
-        original_coverage_file = files.get_file_from_path(self.config.page_path + ".md")
+        self.page_path = self.config.page_path if self.config.page_name is None else self.config.page_name
+        covindex = "covindex.html" if config.use_directory_urls else f"{self.page_path}/covindex.html"
+        original_coverage_file = files.get_file_from_path(self.page_path + ".md")
         original_coverage_file_content = original_coverage_file.content_string if original_coverage_file else None
 
         page_content = self._build_coverage_page(covindex, original_coverage_file_content)
-        files.append(
-            File.generated(
-                config=config,
-                src_uri=self.config.page_path + ".md",
-                content=page_content,
-            ),
-        )
+        file = File.generated(config=config, src_uri=self.page_path + ".md", content=page_content)
+        if file.src_uri in files:
+            files.remove(file)
+        files.append(file)
         return files
 
-    def _build_coverage_page(self, covindex: str, page_content: Optional[str]) -> str:
+    def _build_coverage_page(self, covindex: str, page_content: str | None) -> str:
         """Build coverage page content.
 
         Method to build the coverage page content w.r.t. possible user-defined coverage file content.
@@ -74,20 +76,6 @@ class MkDocsCoveragePlugin(BasePlugin[MkDocsCoverageConfig]):
         Returns:
             The coverage page content.
         """
-        hide_title = self.config.hide_page_title
-        if hide_title is None:
-            # by default hide title if there is no user-defined coverage page content
-            hide_title = not bool(page_content)
-
-        style = textwrap.dedent(
-            """
-            <style>
-            article h1, article > a, .md-sidebar--secondary {
-                display: none !important;
-            }
-            </style>
-            """,
-        ) if hide_title else ""
         iframe = textwrap.dedent(
             f"""
             <iframe
@@ -116,9 +104,19 @@ class MkDocsCoveragePlugin(BasePlugin[MkDocsCoverageConfig]):
             """,
         )
 
-        coverage_page_content = style + iframe + script
+        coverage_page_content = iframe + script
         if not page_content:
-            return coverage_page_content
+            # hide toc and title for automatically generated coverage pages
+            style = textwrap.dedent(
+                """
+                <style>
+                article h1, article > a, .md-sidebar--secondary {
+                    display: none !important;
+                }
+                </style>
+                """,
+            )
+            return style + coverage_page_content
         if page_content.__contains__(self.config.coverage_inplace_placeholder):
             return page_content.replace(self.config.coverage_inplace_placeholder, coverage_page_content)
         return page_content + "\n\n" + coverage_page_content
@@ -136,7 +134,7 @@ class MkDocsCoveragePlugin(BasePlugin[MkDocsCoverageConfig]):
             **kwargs: Additional arguments passed by MkDocs.
         """
         site_dir = Path(config.site_dir)
-        coverage_dir = site_dir / self.config.page_path
+        coverage_dir = site_dir / self.page_path
         tmp_index = site_dir / ".coverage-tmp.html"
 
         if config.use_directory_urls:
