@@ -32,7 +32,7 @@ class MkDocsCoverageConfig(Config):
     )
     page_path = MkType(str, default="coverage")
     html_report_dir = MkType(str, default="htmlcov")
-    coverage_inplace_placeholder = MkType(str, default="<!-- mkdocs-coverage -->")
+    placeholder = MkType(str, default="<!-- mkdocs-coverage -->")
 
 
 class MkDocsCoveragePlugin(BasePlugin[MkDocsCoverageConfig]):
@@ -116,8 +116,8 @@ class MkDocsCoveragePlugin(BasePlugin[MkDocsCoverageConfig]):
                 """,
             )
             return style + coverage_page_content
-        if self.config.coverage_inplace_placeholder in page_content:
-            return page_content.replace(self.config.coverage_inplace_placeholder, coverage_page_content)
+        if self.config.placeholder in page_content:
+            return page_content.replace(self.config.placeholder, coverage_page_content)
         return page_content + "\n\n" + coverage_page_content
 
     def on_post_build(self, config: MkDocsConfig, **kwargs: Any) -> None:  # noqa: ARG002
