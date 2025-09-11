@@ -9,7 +9,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mkdocs.config.base import Config
-from mkdocs.config.config_options import Deprecated as MkDeprecated, Optional as MkOptional, Type as MkType
+from mkdocs.config.config_options import Deprecated as MkDeprecated
+from mkdocs.config.config_options import Optional as MkOptional
+from mkdocs.config.config_options import Type as MkType
 from mkdocs.plugins import BasePlugin
 from mkdocs.structure.files import File, Files
 
@@ -28,7 +30,7 @@ class MkDocsCoverageConfig(Config):
         moved_to="page_path",
         option_type=MkOptional(MkType(str, default=None)),
         message="The 'page_name' configuration option is deprecated and will be removed in a future release. "
-                "Use the 'page_path' configuration option instead."
+        "Use the 'page_path' configuration option instead.",
     )
     page_path = MkType(str, default="coverage")
     html_report_dir = MkType(str, default="htmlcov")
